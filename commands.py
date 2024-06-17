@@ -36,14 +36,15 @@ def setup_commands(bot):
             else:
                 await ctx.send("You are not connected to a voice channel.")
                 return
-        
+    
         async with ctx.typing():
             try:
                 if "spotify.com" in url:
                     queries = convert_spotify_url(url)
                     if isinstance(queries, list):
-                        for query in queries:
-                            player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
+                            for query in queries:
+                                player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
+                                player.title = query  # Assign the query as the title
                             if not ctx.voice_client.is_playing():
                                 ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
                                 await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
@@ -52,6 +53,7 @@ def setup_commands(bot):
                                 await ctx.send(f'Added to queue: {player.title}')
                     else:
                         player = await YTDLSource.from_url(queries, loop=bot.loop, stream=True)
+                        player.title = queries  # Assign the query as the title
                         if not ctx.voice_client.is_playing():
                             ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
                             await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
@@ -59,20 +61,20 @@ def setup_commands(bot):
                             queue.append(queries)
                             await ctx.send(f'Added to queue: {player.title}')
                 else:
-                    player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
-                    if not ctx.voice_client.is_playing():
-                        ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
-                        await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-                    else:
-                        queue.append(url)
-                        await ctx.send(f'Added to queue: {player.title}')
+                        player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
+                        if not ctx.voice_client.is_playing():
+                            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                            await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                        else:
+                            queue.append(url)
+                            await ctx.send(f'Added to queue: {player.title}')
             except discord.errors.ConnectionClosed as e:
                 print(f'Disconnected with error: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
             except Exception as e:
                 print(f'Error in play: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
-
+           
     @bot.command(name='skip', help='Skips the current song')
     async def skip(ctx):
         ctx.voice_client.stop()
@@ -135,9 +137,22 @@ def setup_commands(bot):
         if ctx.voice_client.is_playing():
             player = ctx.voice_client.source
             song_title = player.title.split('[')[0].strip()  # Remove additional tags for cleaner title
-            song = genius.search_song(song_title)
+
+        # Check if the song is from Spotify
+            if "spotify.com" in player.url:
+            # Split the title to extract the song title and artist
+                parts = song_title.split(" - ")
+                if len(parts) == 2:
+                    song_title, artist = parts
+                    song = genius.search_song(song_title, artist)
+                else:
+                    song = genius.search_song(song_title)
+            else:
+                song = genius.search_song(song_title)
+
             if song:
-                await ctx.send(f"Lyrics for {song_title}:\n{song.lyrics}")
+                lyrics_truncated = song.lyrics[:4000]
+                await ctx.send(f"Lyrics for {song.title} by {song.artist}:\n{lyrics_truncated}")
             else:
                 await ctx.send(f"Could not find lyrics for {song_title}.")
         else:
