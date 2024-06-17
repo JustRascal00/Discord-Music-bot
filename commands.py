@@ -30,13 +30,13 @@ def setup_commands(bot):
 
     @bot.command(name='play', help='Plays a song')
     async def play(ctx, url):
-        if ctx.voice_client is None:
+        if not ctx.voice_client:
             if ctx.author.voice:
-                await ctx.author.voice.channel.connect()
+                voice_channel = ctx.author.voice.channel
+                await voice_channel.connect()
             else:
                 await ctx.send("You are not connected to a voice channel.")
                 return
-    
         async with ctx.typing():
             try:
                 if "spotify.com" in url:

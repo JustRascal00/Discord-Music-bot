@@ -27,3 +27,11 @@ class PlaybackControls(discord.ui.View):
             await interaction.response.send_message("Stopped the song.", ephemeral=True)
         else:
             await interaction.response.send_message("The bot is not playing anything at the moment.", ephemeral=True)
+    @discord.ui.button(label="Skip", style=discord.ButtonStyle.secondary)
+    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button):
+        voice_client = interaction.guild.voice_client
+        if voice_client.is_playing():
+            voice_client.stop()
+            await interaction.response.send_message("Skipped to the next song.", ephemeral=True)
+        else:
+            await interaction.response.send_message("The bot is not playing anything at the moment.", ephemeral=True)
