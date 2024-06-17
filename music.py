@@ -19,9 +19,9 @@ ytdl_format_options = {
 }
 
 ffmpeg_options = {
-    'options': '-vn -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+    'options': '-vn'
 }
-
 
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
@@ -44,25 +44,20 @@ class YTDLSource(discord.PCMVolumeTransformer):
         return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 async def play_next(ctx):
-    if ctx.voice_client is None or not ctx.voice_client.is_connected():
-        return
-
     try:
-        if len(queue) > 0:
-            url = queue[0]
-            if not loop_queue:
-                queue.pop(0)
-
-            player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True)
-            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
-            await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-        elif loop and len(queue) > 0:
-            url = queue[0]
-            player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True)
-            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
-            await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-        else:
-            await ctx.send("Queue is empty.")
+        if ctx.voice_client and ctx.voice_client.is_connected():
+            if len(queue) > 0:
+                url = queue.pop(0)
+                player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True)
+                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
+                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+            elif loop and len(queue) > 0:
+                url = queue[0]
+                player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True)
+                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
+                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+            elif not loop and len(queue) == 0:
+                await ctx.send("Queue is empty.")
     except Exception as e:
         print(f'Error in play_next: {e}')
         await ctx.send('An error occurred while trying to play the next song.')

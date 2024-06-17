@@ -5,8 +5,9 @@ from discord.ext import commands
 from music import YTDLSource, play_next
 from controls import PlaybackControls
 from queue_manager import queue, loop, loop_queue
-import lyricsgenius
 from config import GENIUS_API_TOKEN
+from spotify import convert_spotify_url
+import lyricsgenius
 
 genius = lyricsgenius.Genius(GENIUS_API_TOKEN)
 
@@ -29,15 +30,45 @@ def setup_commands(bot):
 
     @bot.command(name='play', help='Plays a song')
     async def play(ctx, url):
+        if ctx.voice_client is None:
+            if ctx.author.voice:
+                await ctx.author.voice.channel.connect()
+            else:
+                await ctx.send("You are not connected to a voice channel.")
+                return
+        
         async with ctx.typing():
             try:
-                player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
-                if not ctx.voice_client.is_playing():
-                    ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
-                    await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                if "spotify.com" in url:
+                    queries = convert_spotify_url(url)
+                    if isinstance(queries, list):
+                        for query in queries:
+                            player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
+                            if not ctx.voice_client.is_playing():
+                                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                            else:
+                                queue.append(query)
+                                await ctx.send(f'Added to queue: {player.title}')
+                    else:
+                        player = await YTDLSource.from_url(queries, loop=bot.loop, stream=True)
+                        if not ctx.voice_client.is_playing():
+                            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                            await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                        else:
+                            queue.append(queries)
+                            await ctx.send(f'Added to queue: {player.title}')
                 else:
-                    queue.append(url)
-                    await ctx.send(f'Added to queue: {player.title}')
+                    player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
+                    if not ctx.voice_client.is_playing():
+                        ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                        await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                    else:
+                        queue.append(url)
+                        await ctx.send(f'Added to queue: {player.title}')
+            except discord.errors.ConnectionClosed as e:
+                print(f'Disconnected with error: {e}')
+                await ctx.send('An error occurred while trying to play the song.')
             except Exception as e:
                 print(f'Error in play: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
@@ -100,14 +131,15 @@ def setup_commands(bot):
         await ctx.send("Shuffled the queue.")
 
     @bot.command(name='lyrics', help='Fetches the lyrics for the current song')
-    async def lyrics(ctx):
+    async def lyrics_command(ctx):
         if ctx.voice_client.is_playing():
             player = ctx.voice_client.source
-            song = genius.search_song(player.title)
+            song_title = player.title.split('[')[0].strip()  # Remove additional tags for cleaner title
+            song = genius.search_song(song_title)
             if song:
-                await ctx.send(f"Lyrics for {player.title}:\n{song.lyrics}")
+                await ctx.send(f"Lyrics for {song_title}:\n{song.lyrics}")
             else:
-                await ctx.send(f"Could not find lyrics for {player.title}.")
+                await ctx.send(f"Could not find lyrics for {song_title}.")
         else:
             await ctx.send("Not playing any music right now.")
 
