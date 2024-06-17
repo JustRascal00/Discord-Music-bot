@@ -1,0 +1,120 @@
+import asyncio
+import random
+import discord
+from discord.ext import commands
+from music import YTDLSource, play_next
+from controls import PlaybackControls
+from queue_manager import queue, loop, loop_queue
+import lyricsgenius
+from config import GENIUS_API_TOKEN
+
+genius = lyricsgenius.Genius(GENIUS_API_TOKEN)
+
+def setup_commands(bot):
+    @bot.command(name='join', help='Tells the bot to join the voice channel')
+    async def join(ctx):
+        if not ctx.author.voice:
+            await ctx.send(f"{ctx.author.name} is not connected to a voice channel")
+            return
+        channel = ctx.author.voice.channel
+        await channel.connect()
+
+    @bot.command(name='leave', help='Tells the bot to leave the voice channel')
+    async def leave(ctx):
+        voice_client = ctx.guild.voice_client
+        if voice_client and voice_client.is_connected():
+            await voice_client.disconnect()
+        else:
+            await ctx.send("The bot is not connected to a voice channel.")
+
+    @bot.command(name='play', help='Plays a song')
+    async def play(ctx, url):
+        async with ctx.typing():
+            try:
+                player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
+                if not ctx.voice_client.is_playing():
+                    ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                    await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                else:
+                    queue.append(url)
+                    await ctx.send(f'Added to queue: {player.title}')
+            except Exception as e:
+                print(f'Error in play: {e}')
+                await ctx.send('An error occurred while trying to play the song.')
+
+    @bot.command(name='skip', help='Skips the current song')
+    async def skip(ctx):
+        ctx.voice_client.stop()
+
+    @bot.command(name='queue', help='Shows the current queue')
+    async def view_queue(ctx):
+        if len(queue) == 0:
+            await ctx.send("The queue is empty.")
+        else:
+            queue_str = '\n'.join([str(i + 1) + '. ' + url for i, url in enumerate(queue)])
+            await ctx.send(f'Current queue:\n{queue_str}')
+
+    @bot.command(name='remove', help='Removes a song from the queue')
+    async def remove(ctx, index: int):
+        if 0 < index <= len(queue):
+            removed = queue.pop(index - 1)
+            await ctx.send(f'Removed {removed} from the queue.')
+        else:
+            await ctx.send("Invalid index.")
+
+    @bot.command(name='clear', help='Clears the queue')
+    async def clear(ctx):
+        global queue
+        queue = []
+        await ctx.send("Cleared the queue.")
+
+    @bot.command(name='move', help='Moves a song in the queue')
+    async def move(ctx, from_index: int, to_index: int):
+        if 0 < from_index <= len(queue) and 0 < to_index <= len(queue):
+            queue.insert(to_index - 1, queue.pop(from_index - 1))
+            await ctx.send(f'Moved song from position {from_index} to {to_index}.')
+        else:
+            await ctx.send("Invalid index.")
+
+    @bot.command(name='volume', help='Changes the volume')
+    async def volume(ctx, volume: int):
+        if ctx.voice_client.source:
+            ctx.voice_client.source.volume = volume / 100
+            await ctx.send(f'Changed volume to {volume}%')
+
+    @bot.command(name='loop', help='Loops the current song')
+    async def loop_track(ctx):
+        global loop
+        loop = not loop
+        await ctx.send(f'Looping is now {"enabled" if loop else "disabled"}.')
+
+    @bot.command(name='loopqueue', help='Loops the entire queue')
+    async def loop_queue_cmd(ctx):
+        global loop_queue
+        loop_queue = not loop_queue
+        await ctx.send(f'Looping queue is now {"enabled" if loop_queue else "disabled"}.')
+
+    @bot.command(name='shuffle', help='Shuffles the queue')
+    async def shuffle(ctx):
+        random.shuffle(queue)
+        await ctx.send("Shuffled the queue.")
+
+    @bot.command(name='lyrics', help='Fetches the lyrics for the current song')
+    async def lyrics(ctx):
+        if ctx.voice_client.is_playing():
+            player = ctx.voice_client.source
+            song = genius.search_song(player.title)
+            if song:
+                await ctx.send(f"Lyrics for {player.title}:\n{song.lyrics}")
+            else:
+                await ctx.send(f"Could not find lyrics for {player.title}.")
+        else:
+            await ctx.send("Not playing any music right now.")
+
+    @bot.command(name='info', help='Shows info about the current song')
+    async def info(ctx):
+        if ctx.voice_client.is_playing():
+            player = ctx.voice_client.source
+            await ctx.send(f'Currently playing: {player.title}')
+        else:
+            await ctx.send("Not playing any music right now.")
