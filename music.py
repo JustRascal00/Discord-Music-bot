@@ -23,6 +23,12 @@ ffmpeg_options = {
     'options': '-vn'
 }
 
+# Bass boost filter (increase bass frequencies)
+bass_boost_filter = "-af 'equalizer=f=40:width_type=o:width=2:g=10'"
+
+# Low tunes filter (lower pitch)
+low_tunes_filter = "-af 'asetrate=44100*0.9,atempo=1.1'"
+
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 class YTDLSource(discord.PCMVolumeTransformer):
@@ -34,7 +40,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.webpage_url = data.get('webpage_url')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
+    async def from_url(cls, url, *, loop=None, stream=False, filter=None):
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
 
@@ -42,7 +48,13 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
 
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        
+        # Apply the filter if provided
+        ffmpeg_opts = ffmpeg_options.copy()
+        if filter:
+            ffmpeg_opts['options'] += f' {filter}'
+        
+        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_opts), data=data)
 
 async def play_next(ctx):
     try:

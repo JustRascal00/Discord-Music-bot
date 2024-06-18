@@ -2,7 +2,7 @@ import asyncio
 import random
 import discord
 from discord.ext import commands
-from music import YTDLSource, play_next
+from music import YTDLSource, play_next, bass_boost_filter, low_tunes_filter  # Import the filters here
 from controls import PlaybackControls
 from queue_manager import queue, loop, loop_queue
 from config import GENIUS_API_TOKEN
@@ -28,8 +28,8 @@ def setup_commands(bot):
         else:
             await ctx.send("The bot is not connected to a voice channel.")
 
-    @bot.command(name='play', help='Plays a song')
-    async def play(ctx, url):
+    @bot.command(name='play', help='Plays a song with optional effects. Usage: !play <url> [bass_boost|low_tunes]')
+    async def play(ctx, url, effect=None):
         if not ctx.voice_client:
             if ctx.author.voice:
                 voice_channel = ctx.author.voice.channel
@@ -37,37 +37,44 @@ def setup_commands(bot):
             else:
                 await ctx.send("You are not connected to a voice channel.")
                 return
+
         async with ctx.typing():
             try:
+                filter = None
+                if effect == "bass_boost":
+                    filter = bass_boost_filter
+                elif effect == "low_tunes":
+                    filter = low_tunes_filter
+
                 if "spotify.com" in url:
                     queries = convert_spotify_url(url)
                     if isinstance(queries, list):
-                            for query in queries:
-                                player = await YTDLSource.from_url(query, loop=bot.loop, stream=True)
-                                player.title = query  # Assign the query as the title
-                            if not ctx.voice_client.is_playing():
-                                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
-                                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-                            else:
-                                queue.append(query)
-                                await ctx.send(f'Added to queue: {player.title}')
+                        for query in queries:
+                            player = await YTDLSource.from_url(query, loop=bot.loop, stream=True, filter=filter)
+                            player.title = query  # Assign the query as the title
+                        if not ctx.voice_client.is_playing():
+                            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                            await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                        else:
+                            queue.append((query, filter))
+                            await ctx.send(f'Added to queue: {player.title}')
                     else:
-                        player = await YTDLSource.from_url(queries, loop=bot.loop, stream=True)
+                        player = await YTDLSource.from_url(queries, loop=bot.loop, stream=True, filter=filter)
                         player.title = queries  # Assign the query as the title
                         if not ctx.voice_client.is_playing():
                             ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
                             await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
                         else:
-                            queue.append(queries)
+                            queue.append((queries, filter))
                             await ctx.send(f'Added to queue: {player.title}')
                 else:
-                        player = await YTDLSource.from_url(url, loop=bot.loop, stream=True)
-                        if not ctx.voice_client.is_playing():
-                            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
-                            await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-                        else:
-                            queue.append(url)
-                            await ctx.send(f'Added to queue: {player.title}')
+                    player = await YTDLSource.from_url(url, loop=bot.loop, stream=True, filter=filter)
+                    if not ctx.voice_client.is_playing():
+                        ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                        await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                    else:
+                        queue.append((url, filter))
+                        await ctx.send(f'Added to queue: {player.title}')
             except discord.errors.ConnectionClosed as e:
                 print(f'Disconnected with error: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
@@ -84,13 +91,13 @@ def setup_commands(bot):
         if len(queue) == 0:
             await ctx.send("The queue is empty.")
         else:
-            queue_str = '\n'.join([str(i + 1) + '. ' + url for i, url in enumerate(queue)])
+            queue_str = '\n'.join([f"{i + 1}. {url}" for i, (url, filter) in enumerate(queue)])
             await ctx.send(f'Current queue:\n{queue_str}')
 
     @bot.command(name='remove', help='Removes a song from the queue')
     async def remove(ctx, index: int):
         if 0 < index <= len(queue):
-            removed = queue.pop(index - 1)
+            removed, _ = queue.pop(index - 1)
             await ctx.send(f'Removed {removed} from the queue.')
         else:
             await ctx.send("Invalid index.")
@@ -138,9 +145,9 @@ def setup_commands(bot):
             player = ctx.voice_client.source
             song_title = player.title.split('[')[0].strip()  # Remove additional tags for cleaner title
 
-        # Check if the song is from Spotify
+            # Check if the song is from Spotify
             if "spotify.com" in player.url:
-            # Split the title to extract the song title and artist
+                # Split the title to extract the song title and artist
                 parts = song_title.split(" - ")
                 if len(parts) == 2:
                     song_title, artist = parts
