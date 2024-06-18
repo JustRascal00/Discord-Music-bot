@@ -52,12 +52,12 @@ def setup_commands(bot):
                         for query in queries:
                             player = await YTDLSource.from_url(query, loop=bot.loop, stream=True, filter=filter)
                             player.title = query  # Assign the query as the title
-                        if not ctx.voice_client.is_playing():
-                            ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
-                            await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-                        else:
-                            queue.append((query, filter))
-                            await ctx.send(f'Added to queue: {player.title}')
+                            if not ctx.voice_client.is_playing():
+                                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
+                                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                            else:
+                                queue.append((query, filter))  # Append as tuple
+                                await ctx.send(f'Added to queue: {player.title}')
                     else:
                         player = await YTDLSource.from_url(queries, loop=bot.loop, stream=True, filter=filter)
                         player.title = queries  # Assign the query as the title
@@ -65,7 +65,7 @@ def setup_commands(bot):
                             ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
                             await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
                         else:
-                            queue.append((queries, filter))
+                            queue.append((queries, filter))  # Append as tuple
                             await ctx.send(f'Added to queue: {player.title}')
                 else:
                     player = await YTDLSource.from_url(url, loop=bot.loop, stream=True, filter=filter)
@@ -73,7 +73,7 @@ def setup_commands(bot):
                         ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
                         await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
                     else:
-                        queue.append((url, filter))
+                        queue.append((url, filter))  # Append as tuple
                         await ctx.send(f'Added to queue: {player.title}')
             except discord.errors.ConnectionClosed as e:
                 print(f'Disconnected with error: {e}')
@@ -81,6 +81,7 @@ def setup_commands(bot):
             except Exception as e:
                 print(f'Error in play: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
+
            
     @bot.command(name='skip', help='Skips the current song')
     async def skip(ctx):

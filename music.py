@@ -72,16 +72,17 @@ async def play_next(ctx):
     try:
         if ctx.voice_client and ctx.voice_client.is_connected():
             if len(queue) > 0:
-                url = queue.pop(0)
-                player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True)
+                url, filter = queue.pop(0)  # Unpack the tuple
+                player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True, filter=filter)
                 ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
                 await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-            elif loop and len(queue) > 0:
-                url = queue[0]
-                player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True)
+            elif loop:
+                # Loop the first song if loop is enabled and there are no more songs in the queue
+                url, filter = queue[0]  # Assuming queue[0] is the last played song when queue was not empty
+                player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True, filter=filter)
                 ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
                 await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-            elif not loop and len(queue) == 0:
+            else:
                 await ctx.send("Queue is empty.")
     except Exception as e:
         print(f'Error in play_next: {e}')
