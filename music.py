@@ -43,9 +43,10 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.title = data.get('title')
         self.url = data.get('url')
         self.webpage_url = data.get('webpage_url')
+        self.duration = data.get('duration')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False, filter=None):
+    async def from_url(cls, url, *, loop=None, stream=False, filter=None, volume=0.5):
         loop = loop or asyncio.get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
 
@@ -53,13 +54,19 @@ class YTDLSource(discord.PCMVolumeTransformer):
             data = data['entries'][0]
 
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        
+
         # Apply the filter if provided
         ffmpeg_opts = ffmpeg_options.copy()
         if filter:
             ffmpeg_opts['options'] += f' {filter}'
-        
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_opts), data=data)
+
+        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_opts), data=data, volume=volume)
+
+    def adjust_volume(self, volume):
+        self.volume = volume / 100  # Discord.PCMVolumeTransformer expects volume in float (0.0 - 2.0)
+
+    def get_duration(self):
+            return self.duration
 
 async def play_next(ctx):
     try:

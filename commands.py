@@ -116,12 +116,6 @@ def setup_commands(bot):
         else:
             await ctx.send("Invalid index.")
 
-    @bot.command(name='volume', help='Changes the volume')
-    async def volume(ctx, volume: int):
-        if ctx.voice_client.source:
-            ctx.voice_client.source.volume = volume / 100
-            await ctx.send(f'Changed volume to {volume}%')
-
     @bot.command(name='loop', help='Loops the current song')
     async def loop_track(ctx):
         global loop
@@ -170,5 +164,27 @@ def setup_commands(bot):
         if ctx.voice_client.is_playing():
             player = ctx.voice_client.source
             await ctx.send(f'Currently playing: {player.title}')
+        else:
+            await ctx.send("Not playing any music right now.")
+
+    @bot.command(name='volume', help='Changes the volume')
+    async def volume(ctx, volume: int):
+        if ctx.voice_client.is_playing():
+            player = ctx.voice_client.source
+            if 0 <= volume <= 100:
+                player.adjust_volume(volume)
+                await ctx.send(f'Changed volume to {volume}%')
+            else:
+                await ctx.send('Volume must be between 0 and 100.')
+        else:
+            await ctx.send("Not playing any music right now.")
+    @bot.command(name='length', help='Shows the duration of the current song')
+    async def length(ctx):
+        if ctx.voice_client.is_playing():
+            player = ctx.voice_client.source
+            duration_seconds = player.get_duration()
+            duration_minutes = duration_seconds // 60
+            duration_seconds %= 60
+            await ctx.send(f'Current song duration: {duration_minutes}:{duration_seconds:02}')
         else:
             await ctx.send("Not playing any music right now.")
