@@ -15,12 +15,17 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0'
+    'source_address': '0.0.0.0',
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'mp3',
+        'preferredquality': '320',  # Setting to 320 kbps for higher quality
+    }],
 }
 
 ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -nostdin',
+    'options': '-vn -b:a 320k -af "volume=1.5, equalizer=f=1000:t=q:w=1.0:g=5"' 
 }
 
 # Bass boost filter (increase bass frequencies)
