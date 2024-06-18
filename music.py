@@ -71,19 +71,24 @@ class YTDLSource(discord.PCMVolumeTransformer):
 async def play_next(ctx):
     try:
         if ctx.voice_client and ctx.voice_client.is_connected():
+            if ctx.voice_client.is_playing():
+                ctx.voice_client.stop()
+
             if len(queue) > 0:
-                url, filter = queue.pop(0)  # Unpack the tuple
+                url, filter = queue[0]  # Get the first item in queue without removing it
                 player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True, filter=filter)
                 ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
                 await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
             elif loop:
-                # Loop the first song if loop is enabled and there are no more songs in the queue
-                url, filter = queue[0]  # Assuming queue[0] is the last played song when queue was not empty
-                player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True, filter=filter)
-                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
-                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+                # Loop the current song if loop is enabled and there are no more songs in the queue
+                if ctx.voice_client.is_playing():
+                    player = ctx.voice_client.source
+                    ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
+                    await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
             else:
                 await ctx.send("Queue is empty.")
+        else:
+            await ctx.send("Not connected to a voice channel.")
     except Exception as e:
         print(f'Error in play_next: {e}')
         await ctx.send('An error occurred while trying to play the next song.')

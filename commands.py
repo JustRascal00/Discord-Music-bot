@@ -46,41 +46,37 @@ def setup_commands(bot):
                 elif effect == "low_tunes":
                     filter = low_tunes_filter
 
-                if "spotify.com" in url:
-                    queries = convert_spotify_url(url)
-                    if isinstance(queries, list):
-                        for query in queries:
-                            player = await YTDLSource.from_url(query, loop=bot.loop, stream=True, filter=filter)
-                            player.title = query  # Assign the query as the title
-                            if not ctx.voice_client.is_playing():
-                                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
-                                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-                            else:
-                                queue.append((query, filter))  # Append as tuple
-                                await ctx.send(f'Added to queue: {player.title}')
-                    else:
-                        player = await YTDLSource.from_url(queries, loop=bot.loop, stream=True, filter=filter)
-                        player.title = queries  # Assign the query as the title
+                queries = convert_spotify_url(url)
+                if isinstance(queries, list):
+                    for query in queries:
+                        player = await YTDLSource.from_url(query, loop=bot.loop, stream=True, filter=filter)
+                        player.title = query  # Assign the query as the title
                         if not ctx.voice_client.is_playing():
                             ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
                             await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
                         else:
-                            queue.append((queries, filter))  # Append as tuple
+                            queue.append((query, filter))  # Append as tuple
                             await ctx.send(f'Added to queue: {player.title}')
                 else:
-                    player = await YTDLSource.from_url(url, loop=bot.loop, stream=True, filter=filter)
+                    player = await YTDLSource.from_url(queries, loop=bot.loop, stream=True, filter=filter)
+                    player.title = queries  # Assign the query as the title
                     if not ctx.voice_client.is_playing():
                         ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop))
                         await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
                     else:
-                        queue.append((url, filter))  # Append as tuple
+                        queue.append((queries, filter))  # Append as tuple
                         await ctx.send(f'Added to queue: {player.title}')
+
+                # Add the first played song to queue if queue is empty
+                if len(queue) == 0:
+                    queue.append((player.title, filter))  # Assuming player.title is correct after playing
             except discord.errors.ConnectionClosed as e:
                 print(f'Disconnected with error: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
             except Exception as e:
                 print(f'Error in play: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
+
 
            
     @bot.command(name='skip', help='Skips the current song')
@@ -120,14 +116,20 @@ def setup_commands(bot):
     @bot.command(name='loop', help='Loops the current song')
     async def loop_track(ctx):
         global loop
-        loop = not loop
-        await ctx.send(f'Looping is now {"enabled" if loop else "disabled"}.')
+        if ctx.voice_client.is_playing():
+            loop = not loop
+            await ctx.send(f'Looping is now {"enabled" if loop else "disabled"}.')
+        else:
+            await ctx.send("Not playing any music right now.")
 
     @bot.command(name='loopqueue', help='Loops the entire queue')
     async def loop_queue_cmd(ctx):
         global loop_queue
-        loop_queue = not loop_queue
-        await ctx.send(f'Looping queue is now {"enabled" if loop_queue else "disabled"}.')
+        if len(queue) > 0:
+            loop_queue = not loop_queue
+            await ctx.send(f'Looping queue is now {"enabled" if loop_queue else "disabled"}.')
+        else:
+            await ctx.send("Queue is empty.")
 
     @bot.command(name='shuffle', help='Shuffles the queue')
     async def shuffle(ctx):
