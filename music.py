@@ -3,6 +3,7 @@ import yt_dlp as youtube_dl
 import asyncio
 from controls import PlaybackControls
 from queue_manager import queue, loop, loop_queue
+import time
 
 ytdl_format_options = {
     'format': 'bestaudio/best',
@@ -44,7 +45,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.url = data.get('url')
         self.webpage_url = data.get('webpage_url')
         self.duration = data.get('duration')
-
+        self.start_time = None
     @classmethod
     async def from_url(cls, url, *, loop=None, stream=False, filter=None, volume=0.5):
         loop = loop or asyncio.get_event_loop()
@@ -60,13 +61,16 @@ class YTDLSource(discord.PCMVolumeTransformer):
         if filter:
             ffmpeg_opts['options'] += f' {filter}'
 
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_opts), data=data, volume=volume)
+        source = discord.FFmpegPCMAudio(filename, **ffmpeg_opts)
+        ytdl_source = cls(source, data=data, volume=volume)
+        ytdl_source.start_time = time.time()  # Set start time when the song starts playing
+        return ytdl_source
 
     def adjust_volume(self, volume):
         self.volume = volume / 100  # Discord.PCMVolumeTransformer expects volume in float (0.0 - 2.0)
 
     def get_duration(self):
-            return self.duration
+        return self.duration
 
 async def play_next(ctx):
     try:

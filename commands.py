@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 import discord
 from discord.ext import commands
 from music import YTDLSource, play_next, bass_boost_filter, low_tunes_filter  # Import the filters here
@@ -181,13 +182,35 @@ def setup_commands(bot):
                 await ctx.send('Volume must be between 0 and 100.')
         else:
             await ctx.send("Not playing any music right now.")
-    @bot.command(name='length', help='Shows the duration of the current song')
+    @bot.command(name='length', help='Shows the duration and current progress of the current song')
     async def length(ctx):
         if ctx.voice_client.is_playing():
             player = ctx.voice_client.source
             duration_seconds = player.get_duration()
             duration_minutes = duration_seconds // 60
             duration_seconds %= 60
-            await ctx.send(f'Current song duration: {duration_minutes}:{duration_seconds:02}')
+
+            # Calculate the current position based on the start time
+            current_time = time.time()
+            elapsed_time = current_time - player.start_time
+            current_minutes = int(elapsed_time // 60)
+            current_seconds = int(elapsed_time % 60)
+
+            # Generate a progress bar
+            progress_bar_length = 20
+            progress = int((elapsed_time / player.get_duration()) * progress_bar_length)
+            progress_bar = "▬" * progress + "🔘" + "▬" * (progress_bar_length - progress - 1)
+
+            # Create the embed
+            embed = discord.Embed(title="🎵 Now Playing", description=f"**[{player.title}]({player.webpage_url})**", color=discord.Color.blue())
+            embed.add_field(name="⏳ Duration", value=f"`{duration_minutes}:{duration_seconds:02}`", inline=True)
+            embed.add_field(name="🕒 Current Position", value=f"`{current_minutes}:{current_seconds:02}`", inline=True)
+            embed.add_field(name="🔄 Progress", value=progress_bar, inline=False)
+            embed.set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
+            
+            # Optional: Add the bot's avatar as an icon
+            embed.set_author(name=bot.user.name, icon_url=bot.user.avatar.url if bot.user.avatar else None)
+
+            await ctx.send(embed=embed)
         else:
             await ctx.send("Not playing any music right now.")
