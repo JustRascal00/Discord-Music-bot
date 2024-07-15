@@ -78,17 +78,18 @@ async def play_next(ctx):
             if ctx.voice_client.is_playing():
                 ctx.voice_client.stop()
 
-            if len(queue) > 0:
-                url, filter = queue[0]  # Get the first item in queue without removing it
+            if loop and ctx.voice_client.source:  # Loop the current song if loop is enabled
+                player = ctx.voice_client.source
+                ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
+                await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+            elif len(queue) > 0:
+                url, filter = queue.pop(0)  # Remove the first item from the queue
                 player = await YTDLSource.from_url(url, loop=ctx.bot.loop, stream=True, filter=filter)
                 ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
                 await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
-            elif loop:
-                # Loop the current song if loop is enabled and there are no more songs in the queue
-                if ctx.voice_client.is_playing():
-                    player = ctx.voice_client.source
-                    ctx.voice_client.play(player, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
-                    await ctx.send(f'Now playing: {player.title}', view=PlaybackControls())
+
+                if loop_queue:
+                    queue.append((url, filter))  # Add the song back to the end of the queue
             else:
                 await ctx.send("Queue is empty.")
         else:
