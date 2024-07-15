@@ -67,10 +67,6 @@ def setup_commands(bot):
                     else:
                         queue.append((queries, filter))  # Append as tuple
                         await ctx.send(f'Added to queue: {player.title}')
-
-                # Add the first played song to queue if queue is empty
-                if len(queue) == 0:
-                    queue.append((player.title, filter))  # Assuming player.title is correct after playing
             except discord.errors.ConnectionClosed as e:
                 print(f'Disconnected with error: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
