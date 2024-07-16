@@ -16,6 +16,10 @@ bot = commands.Bot(command_prefix=commands.when_mentioned_or("!"), intents=inten
 async def on_ready():
     print(f'Logged in as {bot.user} (ID: {bot.user.id})')
     print('------')
+    # Initialize loop states
+    bot.loop_state = False
+    bot.loop_queue_state = False
+
 
 setup_commands(bot)
 

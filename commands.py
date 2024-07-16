@@ -74,11 +74,21 @@ def setup_commands(bot):
                 print(f'Error in play: {e}')
                 await ctx.send('An error occurred while trying to play the song.')
 
-
-           
     @bot.command(name='skip', help='Skips the current song')
     async def skip(ctx):
-        ctx.voice_client.stop()
+        print(f'Before skip: Loop is {"enabled" if ctx.bot.loop_state else "disabled"}')
+        if ctx.bot.loop_state:
+            # Replay the current song
+            current = ctx.voice_client.source
+            ctx.voice_client.stop()
+            new_source = await YTDLSource.from_url(current.webpage_url, loop=ctx.bot.loop, stream=True, filter=current.filter)
+            new_source.start_time = time.time()  # Reset the start time
+            ctx.voice_client.play(new_source, after=lambda e: asyncio.run_coroutine_threadsafe(play_next(ctx), ctx.bot.loop))
+            await ctx.send(f'Replaying: {current.title}', view=PlaybackControls())
+        else:
+            ctx.voice_client.stop()
+            await play_next(ctx)
+        print(f'After skip: Loop is {"enabled" if ctx.bot.loop_state else "disabled"}')
 
     @bot.command(name='queue', help='Shows the current queue')
     async def view_queue(ctx):
@@ -112,21 +122,17 @@ def setup_commands(bot):
 
     @bot.command(name='loop', help='Loops the current song')
     async def loop_track(ctx):
-        global loop
-        if ctx.voice_client.is_playing():
-            loop = not loop
-            await ctx.send(f'Looping is now {"enabled" if loop else "disabled"}.')
-        else:
-            await ctx.send("Not playing any music right now.")
+        if not hasattr(ctx.bot, 'loop_state'):
+            ctx.bot.loop_state = False
+        ctx.bot.loop_state = not ctx.bot.loop_state
+        await ctx.send(f'Loop command invoked: Loop is now {"enabled" if ctx.bot.loop_state else "disabled"}')
 
     @bot.command(name='loopqueue', help='Loops the entire queue')
     async def loop_queue_cmd(ctx):
-        global loop_queue
-        if len(queue) > 0:
-            loop_queue = not loop_queue
-            await ctx.send(f'Looping queue is now {"enabled" if loop_queue else "disabled"}.')
-        else:
-            await ctx.send("Queue is empty.")
+        if not hasattr(ctx.bot, 'loop_queue_state'):
+            ctx.bot.loop_queue_state = False
+        ctx.bot.loop_queue_state = not ctx.bot.loop_queue_state
+        await ctx.send(f'Looping queue is now {"enabled" if ctx.bot.loop_queue_state else "disabled"}')
 
     @bot.command(name='shuffle', help='Shuffles the queue')
     async def shuffle(ctx):
@@ -178,6 +184,7 @@ def setup_commands(bot):
                 await ctx.send('Volume must be between 0 and 100.')
         else:
             await ctx.send("Not playing any music right now.")
+
     @bot.command(name='length', help='Shows the duration and current progress of the current song')
     async def length(ctx):
         if ctx.voice_client.is_playing():
@@ -199,13 +206,10 @@ def setup_commands(bot):
 
             # Create the embed
             embed = discord.Embed(title="🎵 Now Playing", description=f"**[{player.title}]({player.webpage_url})**", color=discord.Color.blue())
-            embed.add_field(name="⏳ Duration", value=f"`{duration_minutes}:{duration_seconds:02}`", inline=True)
-            embed.add_field(name="🕒 Current Position", value=f"`{current_minutes}:{current_seconds:02}`", inline=True)
+            embed.add_field(name="⏳ Duration", value=f"{duration_minutes}:{duration_seconds:02}", inline=True)
+            embed.add_field(name="🕒 Current Position", value=f"{current_minutes}:{current_seconds:02}", inline=True)
             embed.add_field(name="🔄 Progress", value=progress_bar, inline=False)
-            embed.set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar.url if ctx.author.avatar else None)
-            
-            # Optional: Add the bot's avatar as an icon
-            embed.set_author(name=bot.user.name, icon_url=bot.user.avatar.url if bot.user.avatar else None)
+            embed.set_footer(text=f"Requested by {ctx.author.display_name}", icon_url=ctx.author.avatar.url)
 
             await ctx.send(embed=embed)
         else:
